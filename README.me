@@ -1,0 +1,15 @@
+                                CAB401 Semester Assessment
+
+To run:
+make clean
+make
+
+Parallel:                                                     Sequential:
+./huffman -e [thread #] [input_file] [output_file_name]       ./huffman -e [input_file] [output_file_name]
+
+-e : encode
+-d : decode (*this is not parallelized*)
+
+Check that your system has thread affinity, i.e. runs *extremely* slow on Cygwin due 
+to multiprocessing bug that I don't believe was ever solved, 
+http://zachsaw.blogspot.com/2012/10/multithreading-under-cygwin.html
