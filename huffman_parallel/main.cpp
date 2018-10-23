@@ -39,7 +39,7 @@ int main (int argc, char** argv){
 			//DECODE
 			Decoder * decompress = new Decoder(argv[3]);
 			decompress->buildFrequencyTableFromFile();
-			decompress->decode(argv[3]);		
+			decompress->decode(argv[4]);		
 			delete decompress;	
 		}
 		else
