@@ -29,7 +29,7 @@ class Encoder
 		void encode(string output_file_path);
 
 		//Generates the encoded file and save it as output_file_path
-		void writeEncodedFile(string output_file_path, HuffTree * huff);
+		void writeEncodedFile(string output_file_path);
 		void reverse(string & str);
 		
 		~Encoder();
