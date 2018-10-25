@@ -1,33 +1,51 @@
 #include <thread>
+
 #include <unistd.h>
 #include <stdio.h>
+
 #include <iostream>
 #include <fstream>
+
 #include <bitset>
 #include <vector>
-#include "Encoder.h"
 #include <chrono>
 
+#include "Encoder.h"
+
+
+// buffer : read-in buffer from input file, saved for use in writeEncodedFile()
+// huff : global HuffTree object for encoding, used in encode() and build_text_data() 
 unsigned char * buffer;
 HuffTree * huff;
 
+// sections : start points for each thread to operate on in data
+// section_sizes : size of data for each thread to operate on
+// appends : encoded data done by each thread
+// text_data : encoded data from original file contents
 vector<long> sections;
 vector<long> section_sizes;
 vector<string> appends;
 string text_data;
 
+// full_bitset : compressed binary form of text_data, done by each ith thread
 vector<string> full_bitset;
 
+/*
+ * Encoder's only constructor, takes as input a string for the file path for the input file (args[3])
+ * and a string for number of threads to run (args[2])
+ */
 Encoder::Encoder(string input_file_path, string thread_number)
 { 
 	in_path = input_file_path; 
 	NUM_THREADS = stoi(thread_number);
 }
 
-//read from original file, store into buffer and construct frequency table
+/*
+ * Builds histogram of occurring byte frequencies
+ * and saves global buffer 
+ */
 void Encoder::buildFrequencyTable()
 {
-	auto start = std::chrono::high_resolution_clock::now();
 	FILE * input_file = fopen((in_path).c_str(), "r");
 	
 	fseek(input_file, 0, SEEK_END);
@@ -42,14 +60,13 @@ void Encoder::buildFrequencyTable()
 		frequency_table[buffer[i]]++;
 }
 
-//build minheap from table
-//build huffman tree from minheap
-//generate codes from huffman tree and insert into bit_string array
+/*
+ * Constructs MinHeap data structure from histogram, followed by construction of HuffTree to build character codes
+ * Takes file path for output file (args[4])
+ */
 void Encoder::encode(string output_file_path)
 {
 	MinHeap * mh = new MinHeap();
-	//probably not the best to try to parallelize
-	//means I have to make a thread-safe Heap == not fun
 	for (int i = 0; i < 256; i++)
 	{
 		if (frequency_table[i])
@@ -64,30 +81,44 @@ void Encoder::encode(string output_file_path)
 	huff = new HuffTree();
 	huff->buildTree(mh);
 
-	writeEncodedFile(output_file_path, huff);
+	writeEncodedFile(output_file_path);
 }
 
+/*
+ * Called by threads in writeEncodedFile(), builds chuncks of encoded text_data 
+ * Input is an integer specifying which thread is operating on it
+ */
 void build_text_data(int i)
 {
 	for (int j = sections[i]; j < sections[i] + section_sizes[i]; j++)
 	{ appends[i] += huff->getCharCode(buffer[j]); }
 }
 
+/*
+ * Called by threads in writeEncodedFile(), compresses text_data to binary form
+ * Input is an integer specifying which thread is operating on it
+ */
 void build_bitset(int i)
 {
 	for (int j = sections[i]; j < sections[i] + section_sizes[i]; j += 8) 
 		full_bitset[i] += (char)(bitset<8>(text_data.substr(j, 8)).to_ulong());
 }
 
-//parallel version of original function
-void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
+/*
+ * The bulk of Encoder.cpp, takes as input the output file's path.
+ * Builds encoded data in parallel by NUM_THREADS partitions,
+ * then compresses that into a binary form by the same amount of partitions
+ * then writes that out to the output file
+ */
+void Encoder::writeEncodedFile(string output_file_path)
 {
 	std::vector<std::thread> threads(NUM_THREADS);
 
-	//partition data from file per number of threads
+	// partition data by NUM_THREADS
 	int section_size = lsize/NUM_THREADS;
 	int remainder = lsize - (section_size * NUM_THREADS);
 		
+	// assign starting points and data sizes for each thread
 	for (int i = 0; i < NUM_THREADS; i++)
 	{
 		sections.push_back(section_size * i);
@@ -99,7 +130,7 @@ void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
 
 	appends.resize(NUM_THREADS);
 
-	//Create string of huffman codes
+	// launch, run, and join threads, then append data to single text_data string
 	for (int i = 0; i < NUM_THREADS; i++)
 		threads[i] = thread(build_text_data, i);
 
@@ -109,15 +140,14 @@ void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
 	for (int i = 0; i < appends.size(); i++)	
 		text_data += appends[i];
 
-	//pad data to fit % 8 for bytes
+	// pad text_data with 0's to be modulo 8 for converesion to binary
 	while (text_data.length() % 8 != 0)
 	{ text_data.append("0"); }
 
-	//partition huffman code string
+	// partition text_data by NUM_THREADS
 	remainder = text_data.size() % (NUM_THREADS * 8);
 	section_size = (text_data.size() - remainder)/NUM_THREADS;
 	
-	//extra thread that takes care of leftover bits
 	int thread_size = (remainder != 0) ? NUM_THREADS + 1 : NUM_THREADS;
 
 	full_bitset.resize(thread_size);
@@ -137,7 +167,7 @@ void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
 			 section_sizes.push_back(section_size);
 	}
 
-	//create chunks of binary data from huffman codes
+	// launch, run, and join threads building the bitsets
 	for (int i = 0; i < threads.size(); i++)
 		threads[i] = thread(build_bitset, i);
 
@@ -146,7 +176,7 @@ void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
 
 	ofstream output_file((output_file_path).c_str(), ios::out | ios::binary);
 
-	//write header data to file
+	// write header to output file for use in decoding
 	output_file.write(reinterpret_cast<char *>(&unique_chars), sizeof(unique_chars));
 	for (int i = 0; i < 256; i++)
 		if (frequency_table[i] != 0)
@@ -156,8 +186,7 @@ void Encoder::writeEncodedFile(string output_file_path, HuffTree * huff)
 			output_file.write(reinterpret_cast<char *>(&frequency_table[i]), 4);
 		}	
 
-	//write chunks of huffman codes in binary to file
-	//improvement over the original due to writing in large chunks rather than character by character
+	// write bitsets to output file
 	for (int i = 0; i < full_bitset.size(); i++)
 	{ output_file.write(full_bitset[i].c_str(), full_bitset[i].length()); }
 	
