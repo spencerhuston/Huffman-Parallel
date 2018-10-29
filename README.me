@@ -5,15 +5,16 @@ To run (do in each src folder):
   make clean
   make
 
-Parallel:                                                     
-
+Parallel:
+ 
   ./huffman -e [thread #] [input_file] [output_file_name]       
+
 Sequential:
 
   ./huffman -e [input_file] [output_file_name]
 
-***-e*** : encode
-***-d*** : decode (*this is not parallelized*)
+-e : encode
+-d : decode (*this is not parallelized*)
 
 Check that your system has thread affinity, i.e. parallel version runs *extremely* slow on Cygwin due 
 to multiprocessing bug that I don't believe was ever solved, 
