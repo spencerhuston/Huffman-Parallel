@@ -1,11 +1,17 @@
                                 CAB401 Semester Assessment
 
 To run (do in each src folder):
-make clean
-make
 
-Parallel:                                                     Sequential:
-./huffman -e [thread #] [input_file] [output_file_name]       ./huffman -e [input_file] [output_file_name]
+  make clean
+  make
+
+Parallel:
+ 
+  ./huffman -e [thread #] [input_file] [output_file_name]       
+
+Sequential:
+
+  ./huffman -e [input_file] [output_file_name]
 
 -e : encode
 -d : decode (*this is not parallelized*)
